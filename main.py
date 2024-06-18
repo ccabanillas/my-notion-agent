@@ -1,14 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from transformers import pipeline
 import requests
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
-NOTION_API_KEY = "your_notion_api_key"
+# Retrieve environment variables
+NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 DATABASE_IDS = {
-    'task': 'your_task_database_id',
-    'flashcard': 'your_flashcard_database_id',
-    'general': 'your_general_database_id'
+    'task': os.getenv("TASK_DATABASE_ID"),
+    'flashcard': os.getenv("FLASHCARD_DATABASE_ID"),
+    'general': os.getenv("GENERAL_DATABASE_ID")
 }
 
 classifier = pipeline("text-classification", model="distilbert-base-uncased-finetuned-sst-2-english")
