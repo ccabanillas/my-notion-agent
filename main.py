@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from transformers import pipeline
 import requests
 from dotenv import load_dotenv
@@ -17,6 +18,12 @@ DATABASE_IDS = {
     'general': os.getenv("GENERAL_DATABASE_ID")
 }
 
+# Define a Pydantic model for the request body
+class Page(BaseModel):
+    title: str
+    content: str
+
+# Load the text classification pipeline
 classifier = pipeline("text-classification", model="distilbert-base-uncased-finetuned-sst-2-english")
 
 def create_notion_page(api_key, database_id, title, content):
@@ -68,10 +75,10 @@ def classify_page(title):
         return 'general'
 
 @app.post("/add_notion_page/")
-async def add_notion_page(title: str, content: str):
-    page_type = classify_page(title)
+async def add_notion_page(page: Page):
+    page_type = classify_page(page.title)
     database_id = DATABASE_IDS[page_type]
-    result = create_notion_page(NOTION_API_KEY, database_id, title, content)
+    result = create_notion_page(NOTION_API_KEY, database_id, page.title, page.content)
     if result.get('object') == 'error':
         raise HTTPException(status_code=400, detail=result)
     return result
