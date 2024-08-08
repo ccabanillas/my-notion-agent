@@ -1,0 +1,6 @@
+requests
+flask
+python-dotenv
+pylint
+black
+notion-client
