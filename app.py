@@ -26,7 +26,7 @@ def add_page():
         "Name": {"title": [{"text": {"content": content[:100]}}]},
         "NextRightActionNotes": {"rich_text": [{"text": {"content": content}}]},
         "Date": {"date": {"start": datetime.now().isoformat()}},
-        "NextActionTiming": {"status": {"name": "ThisWeek"}},  # Default to "ThisWeek"
+        "NextActionTiming": {"status": {"name": "Today"}},  # Default to "ThisWeek"
         "WinTheWeek": {"checkbox": False}  # Default to unchecked
     }
 
