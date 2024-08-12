@@ -18,7 +18,7 @@ def hello_world():
 @app.route('/add_page', methods=['POST'])
 def add_page():
     content = request.json.get('content', '')
-    
+
     if not content:
         return jsonify({"error": "No content provided"}), 400
 
