@@ -4,3 +4,4 @@ python-dotenv
 pylint
 black
 notion-client
+openai
