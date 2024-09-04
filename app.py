@@ -83,9 +83,9 @@ def add_page():
     else:
         properties = {
             "Name": {"title": [{"text": {"content": content[:100]}}]},
-            "NextRightActionNotes": {"rich_text": [{"text": {"content": content}}]},
+            "NRANotes": {"rich_text": [{"text": {"content": content}}]},
             "Date": {"date": {"start": datetime.now().isoformat()}},
-            "NextActionTiming": {"status": {"name": "Today"}},
+            "NRATiming": {"status": {"name": "Today"}},
             "WinTheWeek": {"checkbox": False}
         }
 
