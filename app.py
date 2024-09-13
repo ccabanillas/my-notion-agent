@@ -6,9 +6,22 @@ from datetime import datetime
 from openai import OpenAI
 import re
 
-load_dotenv()
+print(f"Current working directory: {os.getcwd()}")
+print(f"Contents of current directory: {os.listdir('.')}")
 
-app = Flask(__name__)
+print("Before load_dotenv:")
+print(f"OPENAI_API_KEY: {os.getenv('OPENAI_API_KEY')}")
+
+load_dotenv(dotenv_path=".env", verbose=True)
+
+print("After load_dotenv:")
+print(f"OPENAI_API_KEY: {os.getenv('OPENAI_API_KEY')}")
+
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
+
+openai_client = OpenAI(api_key=openai_api_key)
 
 notion = Client(auth=os.environ["NOTION_API_KEY"])
 outcomes_database_id = os.environ["NOTION_OUTCOMES_DATABASE_ID"]
