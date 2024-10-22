@@ -85,7 +85,7 @@ def add_page():
             "Name": {"title": [{"text": {"content": content[:100]}}]},
             "NRANotes": {"rich_text": [{"text": {"content": content}}]},
             "Date": {"date": {"start": datetime.now().isoformat()}},
-            "NRATiming": {"status": {"name": "Today"}},
+            "NRATiming": {"status": {"name": "TBD"}},
             "WinTheWeek": {"checkbox": False}
         }
 
