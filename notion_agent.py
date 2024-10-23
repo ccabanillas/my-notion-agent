@@ -1,15 +1,33 @@
+# notion_agent.py
 from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+import os
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Literal
 from langchain.agents import initialize_agent, AgentType
-from langchain.chat_models import ChatOpenAI
 from langchain.tools import StructuredTool
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.schema import HumanMessage
+from langchain_openai import ChatOpenAI  # Updated import
 from notion_client import Client
 from enum import Enum
 from datetime import datetime
+import json
 
-# Define valid tags based on your Notion schema
+# Load environment variables at startup
+load_dotenv()
+
+# Validate required environment variables
+def validate_env_vars():
+    required_vars = ["NOTION_TOKEN", "OPENAI_API_KEY", "NEURACACHE_DB_ID"]
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    if missing_vars:
+        raise EnvironmentError(
+            f"Missing required environment variables: {', '.join(missing_vars)}\n"
+            f"Please make sure they are set in your .env file"
+        )
+
+# Define your models and classes (as before)
 class NeuracacheTag(str, Enum):
     ME = "M&E"
     SOFTWARE_DEV = "Software Dev"
@@ -27,19 +45,14 @@ class FlashcardRequest(BaseModel):
     text: str
     tags: Optional[List[NeuracacheTag]] = None
 
-class Flashcard(BaseModel):
-    title: str
-    text: str
-    tags: List[NeuracacheTag] = Field(default_factory=list)
-
 class NeuracacheTool:
-    """Tool for managing flashcards in Neuracache Notion database"""
     def __init__(self, notion_client: Client, database_id: str):
         self.notion = notion_client
         self.database_id = database_id
+        print(f"Initialized NeuracacheTool with database ID: {database_id}")  # Debug log
 
     def create_flashcard(self, title: str, text: str, tags: List[NeuracacheTag]) -> dict:
-        """Create a flashcard in the Neuracache database"""
+        print(f"Creating flashcard: {title}")  # Debug log
         properties = {
             "Title": {"title": [{"text": {"content": title}}]},
             "Text": {"rich_text": [{"text": {"content": text}}]},
@@ -53,22 +66,28 @@ class NeuracacheTool:
         return {"status": "success", "page_id": response["id"]}
 
 class NotionAgent:
-    def __init__(self, notion_token: str, openai_key: str, neuracache_db_id: str):
+    def __init__(self):
+        # Load environment variables
+        self.notion_token = os.getenv("NOTION_TOKEN")
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.neuracache_db_id = os.getenv("NEURACACHE_DB_ID")
+        
+        print(f"Initializing NotionAgent with database ID: {self.neuracache_db_id}")  # Debug log
+        
         # Initialize Notion client
-        self.notion = Client(auth=notion_token)
-        self.neuracache_db_id = neuracache_db_id
+        self.notion = Client(auth=self.notion_token)
         
         # Initialize tool
         self.neuracache_tool = NeuracacheTool(self.notion, self.neuracache_db_id)
         
         # Initialize LLM
         self.llm = ChatOpenAI(
-            temperature=0,
-            model_name="gpt-3.5-turbo-0613",
-            openai_api_key=openai_key
+        temperature=0,
+        model_name="gpt-3.5-turbo",  # Using the latest version
+        openai_api_key=self.openai_key
         )
         
-        # Define available tags for the system
+        # Define available tags
         self.available_tags = [tag.value for tag in NeuracacheTag]
         
         # Initialize system prompt
@@ -85,33 +104,24 @@ class NotionAgent:
         5. For concepts, include concrete examples
         6. Break down complex ideas into digestible pieces
         
-        Remember:
-        - Each flashcard should focus on one clear concept
-        - Text should be comprehensive but concise
-        - Use appropriate technical terminology
-        - Include relevant context
-        - Only use tags from the available list
-        """)
+        Return your response in valid JSON format with these exact keys:
+        {{"title": "The flashcard title", "text": "The detailed explanation", "tags": ["Tag1", "Tag2"]}}
+""")
 
     async def process_flashcard(self, request_text: str) -> dict:
-        """Process a flashcard request and create it in Notion"""
-        # Use LLM to process the request and generate flashcard content
+        print(f"Processing flashcard request: {request_text}")  # Debug log
+        
         messages = self.system_prompt.format_messages(
             available_tags=", ".join(self.available_tags)
         )
         
         user_prompt = f"""
         Create a flashcard from this request: {request_text}
-        
-        Respond in JSON format with these fields:
-        - title: A clear, concise title for the flashcard
-        - text: The detailed explanation or content
-        - tags: List of relevant tags from the available options
         """
         
         messages.append(HumanMessage(content=user_prompt))
         
-        response = self.llm.predict_messages(messages)
+        response = self.llm.invoke(messages)
         content = json.loads(response.content)
         
         # Validate tags
@@ -134,64 +144,43 @@ class NotionAgent:
             }
         }
 
-    async def search_flashcards(self, query: str) -> List[dict]:
-        """Search existing flashcards"""
-        response = self.notion.databases.query(
-            database_id=self.neuracache_db_id,
-            filter={
-                "or": [
-                    {
-                        "property": "Title",
-                        "title": {
-                            "contains": query
-                        }
-                    },
-                    {
-                        "property": "Text",
-                        "rich_text": {
-                            "contains": query
-                        }
-                    }
-                ]
-            }
-        )
-        
-        return [
-            {
-                "id": page["id"],
-                "title": page["properties"]["Title"]["title"][0]["text"]["content"],
-                "text": page["properties"]["Text"]["rich_text"][0]["text"]["content"],
-                "tags": [tag["name"] for tag in page["properties"]["Tags"]["multi_select"]]
-            }
-            for page in response["results"]
-        ]
-
-# FastAPI app setup
+# Initialize FastAPI app
 app = FastAPI()
-agent = None
 
+# Initialize agent at startup
 @app.on_event("startup")
 async def startup_event():
-    global agent
-    agent = NotionAgent(
-        notion_token="your-notion-token",
-        openai_key="your-openai-key",
-        neuracache_db_id="your-neuracache-db-id"
-    )
+    try:
+        # Validate environment variables
+        validate_env_vars()
+        print("Environment variables validated successfully")  # Debug log
+        
+        # Initialize the agent
+        app.state.agent = NotionAgent()
+        print("NotionAgent initialized successfully")  # Debug log
+    except Exception as e:
+        print(f"Error during startup: {str(e)}")  # Debug log
+        raise
 
 @app.post("/flashcard")
 async def create_flashcard(request: FlashcardRequest):
-    if not agent:
+    if not hasattr(app.state, "agent"):
         raise HTTPException(status_code=500, detail="Agent not initialized")
-    return await agent.process_flashcard(request.text)
+    return await app.state.agent.process_flashcard(request.text)
 
-@app.get("/search")
-async def search_flashcards(q: str):
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-    return await agent.search_flashcards(q)
+@app.get("/health")
+async def health_check():
+    """Check if the service is running and properly configured"""
+    return {
+        "status": "healthy",
+        "env_vars_set": {
+            "NOTION_TOKEN": bool(os.getenv("NOTION_TOKEN")),
+            "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+            "NEURACACHE_DB_ID": bool(os.getenv("NEURACACHE_DB_ID"))
+        }
+    }
 
-@app.get("/tags")
-async def list_tags():
-    """List all available tags"""
-    return {"tags": [tag.value for tag in NeuracacheTag]}
+# Run the application
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
