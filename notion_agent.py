@@ -146,6 +146,7 @@ class NotionAgent:
 
 # Initialize FastAPI app
 app = FastAPI()
+port = os.getenv("PORT", "8000")
 
 # Initialize agent at startup
 @app.on_event("startup")
